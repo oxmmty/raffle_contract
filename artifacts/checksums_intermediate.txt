@@ -1,0 +1,1 @@
+3dcf708924db1b8ace7be3fe1151951ff9681dc5989c0afef2d0fa379277faca  /target/wasm32-unknown-unknown/release/raffle.wasm
