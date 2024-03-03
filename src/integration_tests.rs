@@ -6,7 +6,7 @@ mod tests {
     use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
 
     pub fn contract_template() -> Box<dyn Contract<Empty>> {
-        let contract = ContractWrapper::new(
+        let contract: ContractWrapper<crate::msg::ExecuteMsg, InstantiateMsg, crate::msg::QueryMsg, crate::ContractError, crate::ContractError, cosmwasm_std::StdError> = ContractWrapper::new(
             crate::contract::execute,
             crate::contract::instantiate,
             crate::contract::query,

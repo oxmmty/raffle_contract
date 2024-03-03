@@ -1,8 +1,11 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, CosmosMsg, WasmMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, BankMsg, coin};
+use cosmwasm_std::{to_json_binary, CosmosMsg, WasmMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, BankMsg, coin, QuerierWrapper, WasmQuery, QueryRequest, Addr};
 use cw2::set_contract_version;
 use cw721::Cw721ExecuteMsg;
+
+use cw721::{Cw721QueryMsg, OwnerOfResponse}; 
+// use cosmwasm_std::{to_json_binary, Addr, QuerierWrapper, StdResult, WasmQuery, QueryRequest};
 
 use crate::error::ContractError;
 use crate::msg::{RaffleResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
@@ -25,6 +28,8 @@ pub fn instantiate(
         sold_ticket_count: 0,
         total_ticket_count: 0,
         raffle_status: 0, // Assuming 0 represents 'not started'
+        nft_contract_addr: None, // Initialized with empty string
+        nft_token_id: "".to_string(), // Initialized with empty string
         owner: info.sender,
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -44,18 +49,60 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::StartRaffle {} => try_start_raffle(deps, env, info),
+        ExecuteMsg::ReceiveNft { sender, token_id, msg } => try_receive_nft(deps, env, info, sender, token_id, msg),
+        ExecuteMsg::StartRaffle { ticket_price, total_ticket_count, nft_contract_addr, nft_token_id } => 
+            try_start_raffle(deps, env, info, ticket_price, total_ticket_count, nft_contract_addr, nft_token_id),
         ExecuteMsg::EnterRaffle {} => try_enter_raffle(deps, env, info),
         ExecuteMsg::TransferTokensToCollectionWallet { amount, denom, collection_wallet_address } => try_transfer_tokens_to_collection_wallet(deps, env, info, amount, denom, collection_wallet_address),
-        ExecuteMsg::SelectWinner {} => try_select_winner(deps, env, info),
-        ExecuteMsg::TransferNFTtoWinner { winner_addr, nft_contract_addr, token_id } => try_transfer_nft_to_winner(deps, env, info, winner_addr, nft_contract_addr, token_id),
+        ExecuteMsg::SelectWinnerAndTransferNFTtoWinner {} => try_select_winner_and_transfer_nft_to_winner(deps, env, info),
     }
+}
+
+// Pseudo-code for CW721 receiver function
+pub fn try_receive_nft(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+    // Parameters might include the sender address, token ID, and any additional data
+    _sender: String,
+    token_id: String,
+    _msg: Binary,
+) -> Result<Response, ContractError> {
+
+    // Logic to handle the received NFT, such as setting it as the prize for the raffle
+    let mut state = STATE.load(deps.storage)?;
+    state.nft_contract_addr = Some(info.sender);
+    state.nft_token_id = token_id.clone();
+    STATE.save(deps.storage, &state)?;
+
+    // Additional logic as necessary, for example, parsing `msg` for any specific instructions
+
+    Ok(Response::new().add_attribute("action", "receive_nft").add_attribute("token_id", token_id))
+}
+
+fn can_transfer_nft(querier: &QuerierWrapper, nft_contract_addr: Addr, nft_token_id: String, operator: Addr) -> StdResult<bool> {
+    // Adjusted query to fetch ownership information
+    let owner_response: OwnerOfResponse = querier.query(&QueryRequest::Wasm(WasmQuery::Smart {
+        contract_addr: nft_contract_addr.into_string(),
+        msg: to_json_binary(&Cw721QueryMsg::OwnerOf {
+            token_id: nft_token_id,
+            // Include field for including expired items or not, based on your contract's requirements
+            include_expired: None, // This parameter depends on your CW721 version's API
+        })?,
+    }))?;
+
+    // Check if the contract is the owner or has been approved
+    Ok(owner_response.owner == operator || owner_response.approvals.iter().any(|approval| approval.spender == operator))
 }
 
 fn try_start_raffle(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
+    ticket_price: u32,
+    total_ticket_count: u32,
+    nft_contract_addr: Addr,
+    nft_token_id: String,
 ) -> Result<Response, ContractError> {
     let mut state = STATE.load(deps.storage)?;
     // Check
@@ -66,38 +113,58 @@ fn try_start_raffle(
     if state.raffle_status != 0 {
         return Err(ContractError::RaffleStarted {  });
     }
+
+    let contract_addr = match &state.nft_contract_addr {
+        Some(addr) => addr,
+        None => return Err(ContractError::MissingNftContractAddr), // Define this error if it doesn't exist
+    };
+    if !can_transfer_nft(&deps.querier, contract_addr.clone(), state.nft_token_id.clone(), env.contract.address)? {
+        return Err(ContractError::CantAccessPrize {});
+    }
     
     // Assuming 1 represents 'active'
     state.raffle_status = 1;
     state.sold_ticket_count = 0; // Reset sold ticket count if necessary
+    state.ticket_price = ticket_price;
+    state.total_ticket_count = total_ticket_count;
+    state.nft_contract_addr = Some(nft_contract_addr);
+    state.nft_token_id = nft_token_id;
     
     STATE.save(deps.storage, &state)?;
     
     Ok(Response::new().add_attribute("method", "start_raffle").add_attribute("status", "active"))
 }
-fn try_enter_raffle(deps: DepsMut, _env: Env, info: MessageInfo) -> Result<Response, ContractError> {
-    // Define the exact amount expected per entry in the smallest unit, e.g., 1 SEI = 1,000,000 uSEI
 
-    // Sum up the amount of SEI sent with the transaction
-    let mut sent_amount = 0u128;
-    let state = STATE.load(deps.storage)?;
-    let expected_amount_u128 = state.ticket_price as u128;
-    let participant_address = info.sender;
-    for coin in info.funds.iter() {
-        if coin.denom == "usei" { // Adjust the denomination based on how SEI is represented
-            sent_amount += coin.amount.u128();
-        }
+fn try_enter_raffle(
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
+) -> Result<Response, ContractError> {
+    let mut state = STATE.load(deps.storage)?;
+
+    // Ensure the raffle is active
+    if state.raffle_status != 1 {
+        return Err(ContractError::RaffleNotActive {});
     }
 
-    // Check if the sent amount is exactly what's expected
-    if sent_amount < expected_amount_u128 {
-        return Err(ContractError::PayError { ticket_price: state.ticket_price });
+    // Ensure the sold_ticket_count does not exceed total_ticket_count
+    if state.sold_ticket_count >= state.total_ticket_count {
+        return Err(ContractError::RaffleSoldOut {});
     }
 
-    // Add the sender to the list of participants
-    TICKET_STATUS.save(deps.storage, state.sold_ticket_count, &participant_address)?;
+    // Simulate ticket purchase by verifying sent funds match the ticket price
+    let ticket_price = state.ticket_price as u128;
+    let sent_funds = info.funds.iter().find(|coin| coin.denom == "usei").map_or(0u128, |coin| coin.amount.u128());
+    if sent_funds < ticket_price {
+        return Err(ContractError::IncorrectFunds {});
+    }
+    let ticket_number = state.sold_ticket_count.clone();
+    // Increment the sold_ticket_count and save the participant's address
+    TICKET_STATUS.save(deps.storage, state.sold_ticket_count.clone(), &info.sender)?;
+    state.sold_ticket_count += 1;
+    STATE.save(deps.storage, &state)?;
 
-    Ok(Response::new().add_attribute("action", "enter_raffle"))
+    Ok(Response::new().add_attribute("action", "enter_raffle").add_attribute("ticket_number", ticket_number.to_string()))
 }
 
 fn try_transfer_tokens_to_collection_wallet(
@@ -129,89 +196,91 @@ fn try_transfer_tokens_to_collection_wallet(
         .add_attribute("to", collection_wallet))
 }
 
-fn try_select_winner(
+fn try_select_winner_and_transfer_nft_to_winner(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
 ) -> Result<Response, ContractError> {
-    // Load the owner address and ensure only the owner can select a winner
-    let state = STATE.load(deps.storage)?;
+    let mut state = STATE.load(deps.storage)?;
     if info.sender != state.owner {
-        return Err(ContractError::Unauthorized {  });
+        return Err(ContractError::Unauthorized {});
     }
 
-    // Load the number of participants
-    let state: State = STATE.load(deps.storage)?;
     if state.sold_ticket_count == 0 {
-        return Err(ContractError::NoParticipants {  });
+        return Err(ContractError::NoParticipants {});
     }
 
-    // Use the current block timestamp and height as a seed for randomness
     let seed = env.block.time.nanos() + env.block.height;
     let mod_number = state.total_ticket_count as u64;
     let winner_index = seed % mod_number;
 
-    // Retrieve the winner's address
-    let winner_address = TICKET_STATUS.load(deps.storage, winner_index as u32);
+    // Check if the winner's ticket was actually sold
+    match TICKET_STATUS.load(deps.storage, winner_index as u32) {
+        Ok(winner_address) => {
+            // Construct the cw721 transfer message
+            let transfer_msg = Cw721ExecuteMsg::TransferNft {
+                recipient: winner_address.clone().into_string(),
+                token_id: state.nft_token_id.clone(),
+            };
 
-    let winner_address_string = match winner_address {
-        Ok(addr) => addr.to_string(), // If Ok, convert the Addr to String
-        Err(_) => "Error retrieving address".to_string(), // Handle the error case
-    };
-    Ok(Response::new()
-        .add_attribute("action", "select_winner")
-        .add_attribute("winner", winner_address_string))
-}
+            let contract_addr = match &state.nft_contract_addr {
+                Some(addr) => addr,
+                None => return Err(ContractError::MissingNftContractAddr), // Define this error if it doesn't exist
+            };
 
-fn try_transfer_nft_to_winner(
-    deps: DepsMut,
-    _env: Env,
-    info: MessageInfo,
-    winner_addr: String, // Address of the winner
-    nft_contract_addr: String, // cw721 NFT contract address
-    token_id: String, // ID of the NFT to transfer
-) -> Result<Response, ContractError> {
-    let sender = info.sender;
-    let state = STATE.load(deps.storage)?;
-    // Additional Chekc if the winner is nothing.
+            let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: contract_addr.clone().into_string(),
+                msg: to_json_binary(&transfer_msg)?,
+                funds: vec![],
+            });
 
-    // Optional: Check if the sender is authorized (e.g., the contract owner or the raffle contract itself)
-    if sender != state.owner {
-        return Err(ContractError::Unauthorized {  });
+            // Update the state before returning the response
+            state.raffle_status = 0; // End the raffle by setting the status to 0
+            STATE.save(deps.storage, &state)?;
+
+            let contract_addr = match &state.nft_contract_addr {
+                Some(addr) => addr,
+                None => return Err(ContractError::MissingNftContractAddr), // Define this error if it doesn't exist
+            };
+
+            // Return a response with the winner information and the transfer message
+            Ok(Response::new()
+                .add_message(msg)
+                .add_attribute("action", "select_winner_and_transfer_nft")
+                .add_attribute("winner", winner_address.into_string())
+                .add_attribute("nft_contract_addr", contract_addr)
+                .add_attribute("token_id", state.nft_token_id))
+        },
+        Err(_) => {
+            // If the ticket wasn't sold, simply end the raffle without transferring the NFT
+            state.raffle_status = 0; // End the raffle
+            STATE.save(deps.storage, &state)?;
+
+            Ok(Response::new()
+                .add_attribute("action", "select_winner")
+                .add_attribute("status", "raffle_ended_no_winner"))
+        }
     }
-    // Construct the cw721 transfer message
-    let transfer_msg = Cw721ExecuteMsg::TransferNft {
-        recipient: winner_addr.clone(),
-        token_id: token_id.clone(),
-    };
-
-    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-        contract_addr: nft_contract_addr,
-        msg: to_binary(&transfer_msg)?,
-        funds: vec![],
-    });
-
-    Ok(Response::new()
-        .add_message(msg)
-        .add_attribute("action", "transfer_nft")
-        .add_attribute("recipient", winner_addr)
-        .add_attribute("token_id", token_id))
 }
+
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetRaffle {} => to_binary(&query_raffle(deps)?),
+        QueryMsg::GetRaffle {} => to_json_binary(&query_raffle(deps)?),
     }
 }
 
 fn query_raffle(deps: Deps) -> StdResult<RaffleResponse> {
     let state = STATE.load(deps.storage)?;
+
     Ok(RaffleResponse { 
         ticket_price: state.ticket_price,
         sold_ticket_count: state.sold_ticket_count,
         total_ticket_count: state.total_ticket_count,
         raffle_status: state.raffle_status,
+        nft_contract_addr: state.nft_contract_addr,
+        nft_token_id: state.nft_token_id,
         owner: state.owner
     })
 }
@@ -219,14 +288,14 @@ fn query_raffle(deps: Deps) -> StdResult<RaffleResponse> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_dependencies_with_balance, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_binary};
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use cosmwasm_std::{coins, Addr, from_json};
 
     #[test]
     fn proper_initialization() {
-        let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
+        let mut deps = mock_dependencies();
 
-        let msg = InstantiateMsg { count: 17 };
+        let msg = InstantiateMsg { count: 5 };
         let info = mock_info("creator", &coins(1000, "earth"));
 
         // we can just call .unwrap() to assert this was a success
@@ -235,8 +304,71 @@ mod tests {
 
         // it worked, let's query the state
         let res = query(deps.as_ref(), mock_env(), QueryMsg::GetRaffle {}).unwrap();
-        let value: RaffleResponse = from_binary(&res).unwrap();
-        assert_eq!(17, value.raffle_status);
+        let value: RaffleResponse = from_json(&res).unwrap();
+        assert_eq!(0, value.ticket_price); // confirm initial state
+        assert_eq!(0, value.total_ticket_count); // confirm initial state
+        assert_eq!(0, value.sold_ticket_count); // confirm initial state
+        assert_eq!(0, value.raffle_status); // confirm initial state
+        assert_eq!(None, value.nft_contract_addr); // confirm initial state
+        assert_eq!("".to_string(), value.nft_token_id); // confirm initial state
+    }
+
+    #[test]
+    fn start_raffle() {
+        let mut deps = mock_dependencies();
+        let msg = InstantiateMsg { count: 5 };
+        let info = mock_info("creator", &[]);
+        let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+
+        // Try to start the raffle with invalid sender
+        let start_msg = ExecuteMsg::StartRaffle {
+            ticket_price: 100000,
+            total_ticket_count: 1000,
+            nft_contract_addr: Addr::unchecked("nft_contract"),
+            nft_token_id: "token123".to_string(),
+        };
+        let bad_info = mock_info("bad_actor", &[]);
+        let err = execute(deps.as_mut(), mock_env(), bad_info, start_msg.clone()).unwrap_err();
+        match err {
+            ContractError::Unauthorized {} => (),
+            _ => panic!("Must return unauthorized error"),
+        }
+
+        // Start raffle successfully
+        let good_info = mock_info("creator", &[]);
+        let _res = execute(deps.as_mut(), mock_env(), good_info, start_msg).unwrap();
+        // verify raffle started
+    }
+
+    #[test]
+    fn select_winner() {
+        let mut deps = mock_dependencies();
+        // Setup: Instantiate and start raffle, enter raffle with some addresses
+
+        // Attempt to select a winner without being the owner
+        let bad_info = mock_info("bad_actor", &[]);
+        let err = execute(
+            deps.as_mut(),
+            mock_env(),
+            bad_info,
+            ExecuteMsg::SelectWinnerAndTransferNFTtoWinner {},
+        )
+        .unwrap_err();
+        match err {
+            ContractError::Unauthorized {} => (),
+            _ => panic!("Must return unauthorized error"),
+        }
+
+        // Select a winner as the owner
+        let good_info = mock_info("creator", &[]);
+        let _res = execute(
+            deps.as_mut(),
+            mock_env(),
+            good_info,
+            ExecuteMsg::SelectWinnerAndTransferNFTtoWinner {},
+        )
+        .unwrap();
+        // Verify winner selected and NFT transferred (this might require mocking the NFT contract interaction)
     }
 
 }
