@@ -18,10 +18,10 @@ pub enum ContractError {
     #[error("Raffle not started yet")]
     RaffleNotActive {},
 
-    #[error("All raffle tickets are sold out.")]
+    #[error("All raffle tickets are sold out")]
     RaffleSoldOut {},
 
-    #[error("Can not access prize NFT.")]
+    #[error("Can not access prize NFT")]
     CantAccessPrize {},
 
     #[error("Incorrect Funds")]
@@ -34,7 +34,13 @@ pub enum ContractError {
     NoParticipants {},
     
     #[error("Missing NFT contract address")]
-    MissingNftContractAddr, 
+    MissingNftContractAddr {}, 
+
+    #[error("Can not finish raffle since not enough participants")]
+    CantFinishRaffle {},
+
+    #[error("Can not transfer tokens until raffle is finished")]
+    CantTransferTokens {},
     // Add any other custom errors you like here.
     // Look at https://docs.rs/thiserror/1.0.21/thiserror/ for details.
 }

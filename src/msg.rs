@@ -20,6 +20,7 @@ pub enum ExecuteMsg {
     StartRaffle {
         ticket_price: u32,
         total_ticket_count: u32,
+        expected_participants_count: u32,
         nft_contract_addr: Addr,
         nft_token_id: String,
     },
@@ -45,6 +46,7 @@ pub struct RaffleResponse {
     pub ticket_price: u32,
     pub sold_ticket_count: u32,
     pub total_ticket_count: u32,
+    pub expected_participants_count: u32,
     pub raffle_status: i32,
     pub nft_contract_addr: Option<Addr>,
     pub nft_token_id: String,
