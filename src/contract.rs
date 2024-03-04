@@ -181,7 +181,7 @@ fn try_transfer_tokens_to_collection_wallet(
         return Err(ContractError::Unauthorized {  });
     }
 
-    if state.raffle_status.clone() == 0 {
+    if state.raffle_status.clone() == 1 {
         return Err(ContractError::CantTransferTokens {});
     }
 
@@ -230,7 +230,7 @@ fn try_select_winner_and_transfer_nft_to_winner(
     let winner_index = seed % mod_number + 1;
 
     // Check if the winner's ticket was actually sold
-    match TICKET_STATUS.load(deps.storage, winner_index as u32) {
+    match TICKET_STATUS.load(deps.storage, winner_index.clone() as u32) {
         Ok(winner_address) => {
             // Construct the cw721 transfer message
             let transfer_msg = Cw721ExecuteMsg::TransferNft {
@@ -262,6 +262,7 @@ fn try_select_winner_and_transfer_nft_to_winner(
             Ok(Response::new()
                 .add_message(msg)
                 .add_attribute("action", "select_winner_and_transfer_nft")
+                .add_attribute("winner_ticket", (winner_index + 1).to_string())
                 .add_attribute("winner", winner_address.into_string())
                 .add_attribute("nft_contract_addr", contract_addr)
                 .add_attribute("token_id", state.nft_token_id))
@@ -273,7 +274,8 @@ fn try_select_winner_and_transfer_nft_to_winner(
 
             Ok(Response::new()
                 .add_attribute("action", "select_winner")
-                .add_attribute("status", "raffle_ended_no_winner"))
+                .add_attribute("winner_ticket", (winner_index + 1).to_string())
+                .add_attribute("status", "Winner ticket is not sold"))
         }
     }
 }
