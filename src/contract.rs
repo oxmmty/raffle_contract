@@ -23,7 +23,7 @@ pub fn instantiate(
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let sender = info.sender.clone();
-    let state = State {
+    let state: State = State {
         ticket_price: 0,
         sold_ticket_count: 0,
         total_ticket_count: 0,
@@ -275,7 +275,7 @@ fn try_select_winner_and_transfer_nft_to_winner(
             Ok(Response::new()
                 .add_attribute("action", "select_winner")
                 .add_attribute("winner_ticket", (winner_index + 1).to_string())
-                .add_attribute("status", "Winner ticket is not sold"))
+                .add_attribute("status", "Winner ticket was not sold"))
         }
     }
 }

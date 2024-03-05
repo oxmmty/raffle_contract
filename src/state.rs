@@ -10,7 +10,7 @@ pub struct State {
     pub sold_ticket_count: u32,
     pub total_ticket_count: u32,
     pub expected_participants_count: u32,
-    pub raffle_status: i32,
+    pub raffle_status: u8,
     pub nft_contract_addr: Option<Addr>,
     pub nft_token_id: String,
     pub owner: Addr,
