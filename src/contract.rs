@@ -9,7 +9,7 @@ use cw721::{Cw721QueryMsg, OwnerOfResponse};
 
 use crate::error::ContractError;
 use crate::msg::{RaffleResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{State, STATE, TICKET_STATUS};
+use crate::state::{State, TicketInfo, STATE, TICKET_STATUS};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:raffle";
@@ -31,6 +31,7 @@ pub fn instantiate(
         raffle_status: 0, // Assuming 0 represents 'not started'
         nft_contract_addr: None, // Initialized with empty string
         nft_token_id: "".to_string(), // Initialized with empty string
+        count: msg.count.clone(),
         owner: info.sender,
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
@@ -120,6 +121,8 @@ fn try_start_raffle(
         return Err(ContractError::CantAccessPrize {});
     }
     
+    let count_tmp = state.count.clone() + 1;
+
     // Assuming 1 represents 'active'
     state.raffle_status = 1;
     state.sold_ticket_count = 0; // Reset sold ticket count if necessary
@@ -128,6 +131,7 @@ fn try_start_raffle(
     state.expected_participants_count = expected_participants_count;
     state.nft_contract_addr = Some(nft_contract_addr);
     state.nft_token_id = nft_token_id;
+    state.count = count_tmp;
     
     STATE.save(deps.storage, &state)?;
     
@@ -151,6 +155,12 @@ fn try_enter_raffle(
         return Err(ContractError::RaffleSoldOut {});
     }
 
+    // Creating a variable with the specified wallet address and count
+    let ticket_info = TicketInfo {
+        wallet_address: info.sender,
+        count: state.count,
+    };
+
     // Simulate ticket purchase by verifying sent funds match the ticket price
     let ticket_price = state.ticket_price as u128;
     let sent_funds = info.funds.iter().find(|coin| coin.denom == "usei").map_or(0u128, |coin| coin.amount.u128());
@@ -159,7 +169,7 @@ fn try_enter_raffle(
     }
     let ticket_number = state.sold_ticket_count.clone() + 1;
     // Increment the sold_ticket_count and save the participant's address
-    TICKET_STATUS.save(deps.storage, state.sold_ticket_count.clone(), &info.sender)?;
+    TICKET_STATUS.save(deps.storage, state.sold_ticket_count.clone(), &ticket_info)?;
     state.sold_ticket_count += 1;
     STATE.save(deps.storage, &state)?;
 
@@ -227,45 +237,58 @@ fn try_select_winner_and_transfer_nft_to_winner(
     let sold_count = state.sold_ticket_count as u64;
     let seed_assist = sold_count % mod_number.clone() * (env.block.time.nanos() / 1024 / mod_number.clone() + env.block.height.clone() % mod_number.clone() * 256 % mod_number.clone() + 1) % mod_number.clone();
     let seed = (env.block.time.nanos() % mod_number + env.block.height + seed_assist) % mod_number;
-    let winner_index = seed % mod_number + 1;
+    let winner_index = seed % mod_number;
 
     // Check if the winner's ticket was actually sold
     match TICKET_STATUS.load(deps.storage, winner_index.clone() as u32) {
-        Ok(winner_address) => {
-            // Construct the cw721 transfer message
-            let transfer_msg = Cw721ExecuteMsg::TransferNft {
-                recipient: winner_address.clone().into_string(),
-                token_id: state.nft_token_id.clone(),
-            };
+        Ok(winner_ticket) => {
+            if winner_ticket.count == state.count {
 
-            let contract_addr = match &state.nft_contract_addr {
-                Some(addr) => addr,
-                None => return Err(ContractError::MissingNftContractAddr{}), // Define this error if it doesn't exist
-            };
+                let transfer_msg = Cw721ExecuteMsg::TransferNft {
+                    recipient: winner_ticket.wallet_address.clone().into_string(),
+                    token_id: state.nft_token_id.clone(),
+                };
+    
+                let contract_addr = match &state.nft_contract_addr {
+                    Some(addr) => addr,
+                    None => return Err(ContractError::MissingNftContractAddr{}), // Define this error if it doesn't exist
+                };
+    
+                let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+                    contract_addr: contract_addr.clone().into_string(),
+                    msg: to_json_binary(&transfer_msg)?,
+                    funds: vec![],
+                });
+    
+                // Update the state before returning the response
+                state.raffle_status = 0; // End the raffle by setting the status to 0
+                STATE.save(deps.storage, &state)?;
+    
+                let contract_addr = match &state.nft_contract_addr {
+                    Some(addr) => addr,
+                    None => return Err(ContractError::MissingNftContractAddr{}), // Define this error if it doesn't exist
+                };
+    
+                // Return a response with the winner information and the transfer message
+                Ok(Response::new()
+                    .add_message(msg)
+                    .add_attribute("action", "select_winner_and_transfer_nft")
+                    .add_attribute("winner_ticket", (winner_index + 1).to_string())
+                    .add_attribute("winner", winner_ticket.wallet_address.into_string())
+                    .add_attribute("nft_contract_addr", contract_addr)
+                    .add_attribute("token_id", state.nft_token_id))
+            }
 
-            let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-                contract_addr: contract_addr.clone().into_string(),
-                msg: to_json_binary(&transfer_msg)?,
-                funds: vec![],
-            });
-
-            // Update the state before returning the response
-            state.raffle_status = 0; // End the raffle by setting the status to 0
-            STATE.save(deps.storage, &state)?;
-
-            let contract_addr = match &state.nft_contract_addr {
-                Some(addr) => addr,
-                None => return Err(ContractError::MissingNftContractAddr{}), // Define this error if it doesn't exist
-            };
-
-            // Return a response with the winner information and the transfer message
-            Ok(Response::new()
-                .add_message(msg)
-                .add_attribute("action", "select_winner_and_transfer_nft")
-                .add_attribute("winner_ticket", (winner_index + 1).to_string())
-                .add_attribute("winner", winner_address.into_string())
-                .add_attribute("nft_contract_addr", contract_addr)
-                .add_attribute("token_id", state.nft_token_id))
+            else {
+                state.raffle_status = 0; // End the raffle
+                STATE.save(deps.storage, &state)?;
+    
+                Ok(Response::new()
+                    .add_attribute("action", "select_winner")
+                    .add_attribute("winner_ticket", (winner_index + 1).to_string())
+                    .add_attribute("status", "Winner ticket was not sold"))
+            }
+            
         },
         Err(_) => {
             // If the ticket wasn't sold, simply end the raffle without transferring the NFT
@@ -299,6 +322,7 @@ fn query_raffle(deps: Deps) -> StdResult<RaffleResponse> {
         raffle_status: state.raffle_status,
         nft_contract_addr: state.nft_contract_addr,
         nft_token_id: state.nft_token_id,
+        count: state.count,
         owner: state.owner
     })
 }

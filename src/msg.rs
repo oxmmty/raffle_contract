@@ -6,7 +6,7 @@ use cosmwasm_std::Binary;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    pub count: i32,
+    pub count: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -50,5 +50,6 @@ pub struct RaffleResponse {
     pub raffle_status: u8,
     pub nft_contract_addr: Option<Addr>,
     pub nft_token_id: String,
+    pub count: u32,
     pub owner: Addr,
 }
