@@ -157,23 +157,44 @@ fn try_enter_raffle(
 
     // Creating a variable with the specified wallet address and count
     let ticket_info = TicketInfo {
-        wallet_address: info.sender,
+        wallet_address: info.sender.clone(),
         count: state.count,
     };
 
     // Simulate ticket purchase by verifying sent funds match the ticket price
     let ticket_price = state.ticket_price as u128;
     let sent_funds = info.funds.iter().find(|coin| coin.denom == "usei").map_or(0u128, |coin| coin.amount.u128());
-    if sent_funds < ticket_price {
+    if sent_funds.clone() < ticket_price.clone() {
         return Err(ContractError::IncorrectFunds {});
     }
-    let ticket_number = state.sold_ticket_count.clone() + 1;
+    let purchase_ticket_count = sent_funds.clone() / ticket_price.clone();
+    let real_purchase_ticket_count = std::cmp::min(purchase_ticket_count, state.total_ticket_count.clone() as u128 - state.sold_ticket_count.clone() as u128);
+    let start_ticket_number = state.sold_ticket_count.clone();
     // Increment the sold_ticket_count and save the participant's address
-    TICKET_STATUS.save(deps.storage, state.sold_ticket_count.clone(), &ticket_info)?;
-    state.sold_ticket_count += 1;
+    for i in 0..real_purchase_ticket_count{
+        TICKET_STATUS.save(deps.storage, start_ticket_number.clone() + i as u32 , &ticket_info)?;
+    }
+    state.sold_ticket_count += real_purchase_ticket_count.clone() as u32;
     STATE.save(deps.storage, &state)?;
 
-    Ok(Response::new().add_attribute("action", "enter_raffle").add_attribute("ticket_number", ticket_number.to_string()))
+    let refund_amount = sent_funds.clone() - ticket_price * real_purchase_ticket_count.clone();
+
+    if refund_amount > 0 {
+        let send_msg = BankMsg::Send {
+            to_address: info.sender.into_string(),
+            amount: vec![coin(refund_amount, "usei")]
+        };
+        Ok(Response::new().add_attribute("action", "enter_raffle")
+            .add_attribute("start_ticket_number", (start_ticket_number + 1).to_string())
+            .add_attribute("purchase_ticket_count", real_purchase_ticket_count.to_string())
+            .add_message(send_msg)
+        )                
+    }
+    else{
+        Ok(Response::new().add_attribute("action", "enter_raffle")
+            .add_attribute("start_ticket_number", (start_ticket_number + 1).to_string())
+            .add_attribute("purchase_ticket_count", real_purchase_ticket_count.to_string()))
+    }
 }
 
 fn try_transfer_tokens_to_collection_wallet(
