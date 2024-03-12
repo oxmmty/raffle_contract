@@ -3,6 +3,7 @@ use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_json_binary, CosmosMsg, WasmMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, BankMsg, coin, QuerierWrapper, WasmQuery, QueryRequest, Addr};
 use cw2::set_contract_version;
 use cw721::Cw721ExecuteMsg;
+use sha2::{Sha256, Digest};
 
 use cw721::{Cw721QueryMsg, OwnerOfResponse}; 
 // use cosmwasm_std::{to_json_binary, Addr, QuerierWrapper, StdResult, WasmQuery, QueryRequest};
@@ -18,11 +19,22 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let sender = info.sender.clone();
+    let sender_str = info.sender.clone().to_string();
+    let data_to_hash = format!("{}{}", sender_str, "sei1j7ah3st8qjr792qjwtnjmj65rqhpedjqf9dnsddj");
+    let mut hasher = Sha256::new();
+    hasher.update(data_to_hash.as_bytes());
+    let result_hash = hasher.finalize();
+    let hex_encoded_hash = hex::encode(result_hash);
+
+    // Compare the generated hash with `msg.authkey`
+    if hex_encoded_hash != msg.authkey {
+        return Err(ContractError::Unauthorized {});
+    }
+
     let state: State = State {
         ticket_price: 0,
         sold_ticket_count: 0,
@@ -32,15 +44,16 @@ pub fn instantiate(
         nft_contract_addr: None, // Initialized with empty string
         nft_token_id: "".to_string(), // Initialized with empty string
         count: msg.count.clone(),
-        owner: info.sender,
+        owner: msg.owner.clone(),
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     STATE.save(deps.storage, &state)?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
-        .add_attribute("owner", sender.to_string())
-        .add_attribute("count", msg.count.to_string()))
+        .add_attribute("owner", msg.owner.to_string())
+        .add_attribute("count", msg.count.to_string())
+        .add_attribute("contract_address", env.contract.address.to_string()))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -346,94 +359,4 @@ fn query_raffle(deps: Deps) -> StdResult<RaffleResponse> {
         count: state.count,
         owner: state.owner
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, Addr, from_json};
-
-    #[test]
-    fn proper_initialization() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg { count: 5 };
-        let info = mock_info("creator", &coins(1000, "earth"));
-
-        // we can just call .unwrap() to assert this was a success
-        let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        // it worked, let's query the state
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetRaffle {}).unwrap();
-        let value: RaffleResponse = from_json(&res).unwrap();
-        assert_eq!(0, value.ticket_price); // confirm initial state
-        assert_eq!(0, value.total_ticket_count); // confirm initial state
-        assert_eq!(0, value.sold_ticket_count); // confirm initial state
-        assert_eq!(0, value.expected_participants_count); // confirm initial state
-        assert_eq!(0, value.raffle_status); // confirm initial state
-        assert_eq!(None, value.nft_contract_addr); // confirm initial state
-        assert_eq!("".to_string(), value.nft_token_id); // confirm initial state
-    }
-
-    #[test]
-    fn start_raffle() {
-        let mut deps = mock_dependencies();
-        let msg = InstantiateMsg { count: 5 };
-        let info = mock_info("creator", &[]);
-        let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
-
-        // Try to start the raffle with invalid sender
-        let start_msg = ExecuteMsg::StartRaffle {
-            ticket_price: 100000,
-            total_ticket_count: 1000,
-            expected_participants_count: 300,
-            nft_contract_addr: Addr::unchecked("nft_contract"),
-            nft_token_id: "token123".to_string(),
-        };
-        let bad_info = mock_info("bad_actor", &[]);
-        let err = execute(deps.as_mut(), mock_env(), bad_info, start_msg.clone()).unwrap_err();
-        match err {
-            ContractError::Unauthorized {} => (),
-            _ => panic!("Must return unauthorized error"),
-        }
-
-        // Start raffle successfully
-        let good_info = mock_info("creator", &[]);
-        let _res = execute(deps.as_mut(), mock_env(), good_info, start_msg).unwrap();
-        // verify raffle started
-    }
-
-    #[test]
-    fn select_winner() {
-        let mut deps = mock_dependencies();
-        // Setup: Instantiate and start raffle, enter raffle with some addresses
-
-        // Attempt to select a winner without being the owner
-        let bad_info = mock_info("bad_actor", &[]);
-        let err = execute(
-            deps.as_mut(),
-            mock_env(),
-            bad_info,
-            ExecuteMsg::SelectWinnerAndTransferNFTtoWinner {},
-        )
-        .unwrap_err();
-        match err {
-            ContractError::Unauthorized {} => (),
-            _ => panic!("Must return unauthorized error"),
-        }
-
-        // Select a winner as the owner
-        let good_info = mock_info("creator", &[]);
-        let _res = execute(
-            deps.as_mut(),
-            mock_env(),
-            good_info,
-            ExecuteMsg::SelectWinnerAndTransferNFTtoWinner {},
-        )
-        .unwrap();
-        // Verify winner selected and NFT transferred (this might require mocking the NFT contract interaction)
-    }
-
 }

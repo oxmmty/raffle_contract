@@ -13,7 +13,7 @@ upload-testnet:
 	seid tx wasm store ./artifacts/raffle.wasm -y --from=dj --chain-id=atlantic-2 --node https://rpc.atlantic-2.seinetwork.io --gas=10000000 --fees=1000000usei --broadcast-mode=block
 
 instantiate-testnet:
-	seid tx wasm instantiate ${id} '{"count": 5}' --chain-id atlantic-2 --from dj --gas=4000000 --fees=1000000usei --broadcast-mode=block --label raffle --no-admin --node https://rpc.atlantic-2.seinetwork.io
+	seid tx wasm instantiate ${id} '{"count": 5, "authkey": "abcdefghijklmnopqrstuvwxyz"}' --chain-id atlantic-2 --from dj --gas=4000000 --fees=1000000usei --broadcast-mode=block --label raffle --no-admin --node https://rpc.atlantic-2.seinetwork.io
 
 balance-hk-testnet:
 	seid q bank balances sei1cz56s8l9yz92jgstv9y4pyxj8vkdnw7acug8n7 --node https://rpc.atlantic-2.seinetwork.io --chain-id atlantic-2

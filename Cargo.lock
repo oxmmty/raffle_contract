@@ -1231,9 +1231,11 @@ dependencies = [
  "cw-storage-plus 0.13.2",
  "cw2 0.13.2",
  "cw721",
+ "hex",
  "schemars",
  "serde",
  "serde_json",
+ "sha2 0.10.8",
  "thiserror",
 ]
 

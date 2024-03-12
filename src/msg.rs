@@ -7,6 +7,8 @@ use cosmwasm_std::Binary;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     pub count: u32,
+    pub authkey: String,
+    pub owner: Addr
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
