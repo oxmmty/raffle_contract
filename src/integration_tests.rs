@@ -37,8 +37,8 @@ mod tests {
     fn proper_instantiate() -> (App, CwTemplateContract) {
         let mut app = mock_app();
         let cw_template_id = app.store_code(contract_template());
-
-        let msg = InstantiateMsg { count: 1u32 };
+        let owner = Addr::unchecked("sei1hkwafxahtra74nhtxwwej5p28jyhvev8tl6ed5");
+        let msg = InstantiateMsg { owner };
         let cw_template_contract_addr = app
             .instantiate_contract(
                 cw_template_id,

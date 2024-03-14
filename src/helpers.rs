@@ -5,7 +5,7 @@ use cosmwasm_std::{
     to_json_binary, Addr, CosmosMsg, CustomQuery, Querier, QuerierWrapper, StdResult, WasmMsg, WasmQuery,
 };
 
-use crate::msg::{RaffleResponse, ExecuteMsg, QueryMsg};
+use crate::msg::{GlobalResponse, ExecuteMsg, QueryMsg};
 
 /// CwTemplateContract is a wrapper around Addr that provides a lot of helpers
 /// for working with this.
@@ -28,19 +28,19 @@ impl CwTemplateContract {
     }
 
     /// Get Count
-    pub fn count<Q, T, CQ>(&self, querier: &Q) -> StdResult<RaffleResponse>
+    pub fn count<Q, T, CQ>(&self, querier: &Q) -> StdResult<GlobalResponse>
     where
         Q: Querier,
         T: Into<String>,
         CQ: CustomQuery,
     {
-        let msg = QueryMsg::GetRaffle {};
+        let msg = QueryMsg::GetGlobalInfo {};
         let query = WasmQuery::Smart {
             contract_addr: self.addr().into(),
             msg: to_json_binary(&msg)?,
         }
         .into();
-        let res: RaffleResponse = QuerierWrapper::<CQ>::new(querier).query(&query)?;
+        let res: GlobalResponse = QuerierWrapper::<CQ>::new(querier).query(&query)?;
         Ok(res)
     }
 }

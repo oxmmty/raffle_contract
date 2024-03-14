@@ -12,14 +12,23 @@ pub enum ContractError {
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
 
-    #[error("Raffle already started or completed")]
-    RaffleStarted {},
+    #[error("Wrong Game Id")]
+    WrongGameId {},
+
+    #[error("Raffle already ended")]
+    RaffleEnded {},
+
+    #[error("Raffle Time Over")]
+    RaffleTimeOver {},
 
     #[error("Raffle not started yet")]
     RaffleNotActive {},
-
-    #[error("All raffle tickets are sold out")]
+    
+    #[error("All raffle tickets was sold.")]
     RaffleSoldOut {},
+
+    #[error("It is not the end time of the game")]
+    CantFinishGame {},
 
     #[error("Can not access prize NFT")]
     CantAccessPrize {},
@@ -35,9 +44,6 @@ pub enum ContractError {
     
     #[error("Missing NFT contract address")]
     MissingNftContractAddr {}, 
-
-    #[error("Can not finish raffle since not enough participants")]
-    CantFinishRaffle {},
 
     #[error("Can not transfer tokens until raffle is finished")]
     CantTransferTokens {},
