@@ -4,10 +4,11 @@ use serde::{Deserialize, Serialize};
 use cosmwasm_std::Addr;
 use cosmwasm_std::Binary;
 
+use crate::state::GameState;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
-    // pub count: u32,
-    // pub authkey: String,
+    pub authkey: String,
     pub owner: Addr
 }
 
@@ -20,22 +21,23 @@ pub enum ExecuteMsg {
         msg: Binary,
     },
     StartRaffle {
-        ticket_price: u32,
-        total_ticket_count: u32,
+        ticket_price: u64,
+        refund_price: u64,
+        total_ticket_count: u64,
         nft_contract_addr: Addr,
         nft_token_id: String,
         collection_wallet: Addr, // Collection wallet address to send tokens after the game finished
         end_time: u64,
     },
     EnterRaffle {
-        game_id: u32
+        game_id: u64
     },
     TransferTokensToCollectionWallet {
         amount: u128,
         denom: String,
         collection_wallet_address: String,
     },
-    SelectWinnerAndTransferNFTtoWinner { game_id: u32 },
+    SelectWinnerAndTransferNFTtoWinner { game_id: u64 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -43,25 +45,38 @@ pub enum ExecuteMsg {
 pub enum QueryMsg {
     // GetCount returns the current count as a json-encoded number
     GetGlobalInfo {},
-    GetGameInfo { game_id: u32 }
+    GetGameInfo { game_id: u64 },
+    GetTicketsForWallet { game_id: u64, wallet_addr: Addr },
+    GetAllGames {},
 }
 
 // We define a custom struct for each query response
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GlobalResponse {
-    pub raffle_count: u32,
+    pub raffle_count: u64,
     pub owner: Addr,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GameResponse {
-    pub ticket_price: u32,
-    pub sold_ticket_count: u32,
-    pub total_ticket_count: u32,
+    pub ticket_price: u64,
+    pub sold_ticket_count: u64,
+    pub total_ticket_count: u64,
+    pub total_seigma_amounts: u128,
     pub raffle_status: u8,
-    pub nft_contract_addr: Option<Addr>,
+    pub nft_contract_addr: Addr,
     pub nft_token_id: String,
     pub owner: Addr,
     pub collection_wallet: Addr,
     pub end_time: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct WalletTicketResponse {
+    pub tickets: Vec<u64>
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct AllGamesResponse {
+    pub games: Vec<GameState>,
 }

@@ -1,6 +1,6 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_json_binary, StdError, Storage, CosmosMsg, WasmMsg, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, BankMsg, coin, QuerierWrapper, WasmQuery, QueryRequest, Addr};
+use cosmwasm_std::{coin, to_json_binary, Addr, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, QuerierWrapper, QueryRequest, Response, StdError, StdResult, Storage, WasmMsg, WasmQuery};
 use cw2::set_contract_version;
 use cw721::Cw721ExecuteMsg;
 use sha2::{Sha256, Digest};
@@ -9,8 +9,8 @@ use cw721::{Cw721QueryMsg, OwnerOfResponse};
 // use cosmwasm_std::{to_json_binary, Addr, QuerierWrapper, StdResult, WasmQuery, QueryRequest};
 
 use crate::error::ContractError;
-use crate::msg::{GlobalResponse, GameResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{GlobalState, GameState, GameStatus, GAMESTATE, GLOBALSTATE, TICKET_STATUS};
+use crate::msg::{GlobalResponse, GameResponse, WalletTicketResponse, AllGamesResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::state::{GlobalState, GameState, GameStatus, GAME_STATE, GLOBAL_STATE, TICKET_STATUS, NFT_STATUS, WALLET_TICKETS};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:raffle";
@@ -23,24 +23,24 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    // let sender_str = info.sender.clone().to_string();
-    // let data_to_hash = format!("{}{}", sender_str, "sei1j7ah3st8qjr792qjwtnjmj65rqhpedjqf9dnsddj");
-    // let mut hasher = Sha256::new();
-    // hasher.update(data_to_hash.as_bytes());
-    // let result_hash = hasher.finalize();
-    // let hex_encoded_hash = hex::encode(result_hash);
+    let sender_str = info.sender.clone().to_string();
+    let data_to_hash = format!("{}{}", sender_str, "sei1j7ah3st8qjr792qjwtnjmj65rqhpedjqf9dnsddj");
+    let mut hasher = Sha256::new();
+    hasher.update(data_to_hash.as_bytes());
+    let result_hash = hasher.finalize();
+    let hex_encoded_hash = hex::encode(result_hash);
 
-    // // Compare the generated hash with `msg.authkey`
-    // if hex_encoded_hash != msg.authkey {
-    //     return Err(ContractError::Unauthorized {});
-    // }
+    // Compare the generated hash with `msg.authkey`
+    if hex_encoded_hash != msg.authkey {
+        return Err(ContractError::Unauthorized {});
+    }
 
     let global_state: GlobalState = GlobalState {
         count: 0,
         owner: msg.owner.clone()
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    GLOBALSTATE.save(deps.storage, &global_state)?;
+    GLOBAL_STATE.save(deps.storage, &global_state)?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
@@ -57,8 +57,8 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::ReceiveNft { sender, token_id, msg } => try_receive_nft(deps, env, info, sender, token_id, msg),
-        ExecuteMsg::StartRaffle { ticket_price, total_ticket_count, nft_contract_addr, nft_token_id, collection_wallet, end_time } => 
-            try_start_raffle(deps, env, info, ticket_price, total_ticket_count, nft_contract_addr, nft_token_id, collection_wallet, end_time),
+        ExecuteMsg::StartRaffle { ticket_price, refund_price, total_ticket_count, nft_contract_addr, nft_token_id, collection_wallet, end_time } => 
+            try_start_raffle(deps, env, info, ticket_price, refund_price, total_ticket_count, nft_contract_addr, nft_token_id, collection_wallet, end_time),
         ExecuteMsg::EnterRaffle { game_id } => try_enter_raffle(deps, env, info, game_id),
         ExecuteMsg::TransferTokensToCollectionWallet { amount, denom, collection_wallet_address } => try_transfer_tokens_to_collection_wallet(deps, env, info, amount, denom, collection_wallet_address),
         ExecuteMsg::SelectWinnerAndTransferNFTtoWinner { game_id } => try_select_winner_and_transfer_nft_to_winner(deps, env, info, game_id),
@@ -67,9 +67,9 @@ pub fn execute(
 
 // Pseudo-code for CW721 receiver function
 pub fn try_receive_nft(
-    deps: DepsMut,
+    _deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     // Parameters might include the sender address, token ID, and any additional data
     _sender: String,
     token_id: String,
@@ -84,8 +84,8 @@ pub fn try_receive_nft(
 }
 
 // Function to get the current status of a game
-pub fn get_game_status(storage: &dyn Storage, env: Env, game_id: u32) -> StdResult<GameStatus> {
-    let game = GAMESTATE.load(storage, game_id)?;
+pub fn get_game_status(storage: &dyn Storage, env: Env, game_id: u64) -> StdResult<GameStatus> {
+    let game = GAME_STATE.load(storage, game_id)?;
 
     if game.raffle_status == 1 {
         Ok(GameStatus::Ended)
@@ -115,14 +115,15 @@ fn try_start_raffle(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    ticket_price: u32,
-    total_ticket_count: u32,
+    ticket_price: u64,
+    refund_price: u64,
+    total_ticket_count: u64,
     nft_contract_addr: Addr,
     nft_token_id: String,
     collection_wallet: Addr,
     end_time: u64
 ) -> Result<Response, ContractError> {
-    let mut global_state = GLOBALSTATE.load(deps.storage)?;
+    let mut global_state = GLOBAL_STATE.load(deps.storage)?;
     // Check
     if info.sender != global_state.owner {
         return Err(ContractError::Unauthorized {  });
@@ -132,36 +133,70 @@ fn try_start_raffle(
         return Err(ContractError::CantAccessPrize {});
     }
     
+    // Check if the NFT is available for use as a prize
+    let nft_status_key = (nft_contract_addr.clone(), nft_token_id.clone());
+    let nft_status = NFT_STATUS.load(deps.storage, nft_status_key.clone())?;
+    if nft_status {
+        return Err(ContractError::CantAccessPrize {});
+    }
+
+    NFT_STATUS.save(deps.storage, nft_status_key, &true)?;
     let count_tmp = global_state.count.clone() + 1;
     global_state.count += 1;
 
     // Assuming 1 represents 'active'
     let game_state: GameState = GameState {
         raffle_status: 1,
-        sold_ticket_count: 0, // Reset sold ticket count if necessary
+        sold_ticket_count: 0,
         ticket_price: ticket_price,
+        refund_price: refund_price,
         total_ticket_count: total_ticket_count,
-        nft_contract_addr: Some(nft_contract_addr),
+        total_seigma_amounts: 0,
+        nft_contract_addr: nft_contract_addr,
         nft_token_id: nft_token_id,
         owner: info.sender.clone(),
         collection_wallet: collection_wallet,
         end_time: end_time,
     };
 
-    GLOBALSTATE.save(deps.storage, &global_state)?;
-    GAMESTATE.save(deps.storage, count_tmp.clone() , &game_state)?;
+    GLOBAL_STATE.save(deps.storage, &global_state)?;
+    GAME_STATE.save(deps.storage, count_tmp.clone() , &game_state)?;
     
     Ok(Response::new().add_attribute("method", "start_raffle").add_attribute("status", "active").add_attribute("game_id", count_tmp.to_string()))
 }
+
+// fn buy_tokens_for_losers(
+//     _deps: DepsMut,
+//     _env: Env,
+//     _info: MessageInfo,
+//     amount: u128, // Amount of SEI tokens to use for buying
+//     _target_token_denom: &str, // Target token you want to buy
+//     dex_contract_addr: &str, // Address of the DEX contract
+// ) -> StdResult<CosmosMsg> {
+//     // Construct the swap message according to the DEX's expected format
+//     // This is a placeholder; you must replace it with the actual format and parameters
+//     let swap_msg = {
+
+//     };
+
+//     // Convert the swap message to binary for the execute message
+//     let msg = to_json_binary(&swap_msg)?;
+
+//     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
+//         contract_addr: dex_contract_addr.to_string(),
+//         msg,
+//         funds: vec![Coin { denom: "usei".to_string(), amount: amount.into() }], // Sending SEI tokens with the swap request
+//     }))
+// }
 
 fn try_enter_raffle(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    game_id: u32,
+    game_id: u64,
 ) -> Result<Response, ContractError> {
 
-    match GAMESTATE.load(deps.storage, game_id.clone()) {
+    match GAME_STATE.load(deps.storage, game_id.clone()) {
         Ok(mut game_state) => {
             let game_status = get_game_status(deps.storage, env.clone(), game_id)?;
 
@@ -181,12 +216,19 @@ fn try_enter_raffle(
                     let purchase_ticket_count = sent_funds.clone() / ticket_price.clone();
                     let real_purchase_ticket_count = std::cmp::min(purchase_ticket_count, game_state.total_ticket_count.clone() as u128 - game_state.sold_ticket_count.clone() as u128);
                     let start_ticket_number = game_state.sold_ticket_count.clone();
+                    let key = (game_id.clone(), info.sender.clone());
+
+                    // Retrieve the current list of tickets for the wallet and game ID, if it exists
+                    let mut tickets = WALLET_TICKETS.load(deps.storage, key.clone()).unwrap_or_else(|_| Vec::new());
                     // Increment the sold_ticket_count and save the participant's address
                     for i in 0..real_purchase_ticket_count{
-                        TICKET_STATUS.save(deps.storage, (game_id.clone(), start_ticket_number.clone() + i as u32) , &info.sender.clone())?;
+                        TICKET_STATUS.save(deps.storage, (game_id.clone(), start_ticket_number.clone() + i as u64) , &info.sender.clone())?;
+                        tickets.push(start_ticket_number.clone() + i as u64);
                     }
-                    game_state.sold_ticket_count += real_purchase_ticket_count.clone() as u32;
-                    GAMESTATE.save(deps.storage, game_id , &game_state)?;
+                    // Save the updated list back to storage
+                    WALLET_TICKETS.save(deps.storage, key, &tickets)?;
+                    game_state.sold_ticket_count += real_purchase_ticket_count.clone() as u64;
+                    GAME_STATE.save(deps.storage, game_id , &game_state)?;
 
                     let refund_amount = sent_funds.clone() - ticket_price * real_purchase_ticket_count.clone();
 
@@ -225,7 +267,7 @@ fn try_transfer_tokens_to_collection_wallet(
     denom: String, // Token denomination, e.g., "usei" for micro SEI tokens
     collection_wallet_address: String, // Address of the collection wallet
 ) -> Result<Response, ContractError> {
-    let global_state = GLOBALSTATE.load(deps.storage)?;
+    let global_state = GLOBAL_STATE.load(deps.storage)?;
     let collection_wallet = collection_wallet_address.clone();
     // Authorization check: Ensure the caller is the owner
     if info.sender != global_state.owner {
@@ -249,8 +291,8 @@ fn try_transfer_tokens_to_collection_wallet(
 fn try_select_winner_and_transfer_nft_to_winner(
     deps: DepsMut,
     env: Env,
-    info: MessageInfo,
-    game_id: u32
+    _info: MessageInfo,
+    game_id: u64
 ) -> Result<Response, ContractError> {
     let game_status = get_game_status(deps.storage, env.clone(), game_id.clone())?;
 
@@ -258,7 +300,7 @@ fn try_select_winner_and_transfer_nft_to_winner(
         GameStatus::Active => Err(ContractError::CantFinishGame {}), 
         GameStatus::Ended => Err(ContractError::RaffleEnded {}),
         GameStatus::TimeOver => {
-            let mut game_state = GAMESTATE.load(deps.storage, game_id.clone())?;
+            let mut game_state = GAME_STATE.load(deps.storage, game_id.clone())?;
 
             let mod_number = game_state.total_ticket_count as u64;
             let sold_count = game_state.sold_ticket_count as u64;
@@ -266,8 +308,10 @@ fn try_select_winner_and_transfer_nft_to_winner(
             let seed = (env.block.time.nanos() % mod_number + env.block.height + seed_assist) % mod_number;
             let winner_index = seed % mod_number;
 
+            
+
             // Check if the winner's ticket was actually sold
-            match TICKET_STATUS.load(deps.storage, (game_id.clone(), winner_index.clone() as u32)) {
+            match TICKET_STATUS.load(deps.storage, (game_id.clone(), winner_index.clone() as u64)) {
                 Ok(winner_ticket) => {
 
                     let transfer_msg = Cw721ExecuteMsg::TransferNft {
@@ -275,25 +319,15 @@ fn try_select_winner_and_transfer_nft_to_winner(
                         token_id: game_state.nft_token_id.clone(),
                     };
         
-                    let contract_addr = match &game_state.nft_contract_addr {
-                        Some(addr) => addr,
-                        None => return Err(ContractError::MissingNftContractAddr{}), // Define this error if it doesn't exist
-                    };
-        
                     let msg = CosmosMsg::Wasm(WasmMsg::Execute {
-                        contract_addr: contract_addr.clone().into_string(),
+                        contract_addr: game_state.nft_contract_addr.clone().into_string(),
                         msg: to_json_binary(&transfer_msg)?,
                         funds: vec![],
                     });
         
                     // Update the state before returning the response
                     game_state.raffle_status = 0; // End the raffle by setting the status to 0
-                    GAMESTATE.save(deps.storage, game_id.clone(), &game_state)?;
-        
-                    let contract_addr = match &game_state.nft_contract_addr {
-                        Some(addr) => addr,
-                        None => return Err(ContractError::MissingNftContractAddr{}), // Define this error if it doesn't exist
-                    };
+                    GAME_STATE.save(deps.storage, game_id.clone(), &game_state)?;
         
                     // Return a response with the winner information and the transfer message
                     Ok(Response::new()
@@ -302,13 +336,14 @@ fn try_select_winner_and_transfer_nft_to_winner(
                         .add_attribute("game_id", game_id.to_string())
                         .add_attribute("winner_ticket", (winner_index + 1).to_string())
                         .add_attribute("winner", winner_ticket.into_string())
-                        .add_attribute("nft_contract_addr", contract_addr)
+                        .add_attribute("nft_contract_addr", game_state.nft_contract_addr.into_string())
                         .add_attribute("token_id", game_state.nft_token_id))                    
                 },
                 Err(_) => {
                     // If the ticket wasn't sold, simply end the raffle without transferring the NFT
                     game_state.raffle_status = 0; // End the raffle
-                    GAMESTATE.save(deps.storage, game_id.clone(), &game_state)?;
+                    GAME_STATE.save(deps.storage, game_id.clone(), &game_state)?;
+                    NFT_STATUS.save(deps.storage, (game_state.nft_contract_addr, game_state.nft_token_id), &false)?;
 
                     Ok(Response::new()
                         .add_attribute("action", "select_winner")
@@ -327,12 +362,14 @@ fn try_select_winner_and_transfer_nft_to_winner(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetGlobalInfo {} => to_json_binary(&query_global_info(deps)?),
-        QueryMsg::GetGameInfo { game_id } => to_json_binary(&query_game_info(deps, game_id)?)
+        QueryMsg::GetGameInfo { game_id } => to_json_binary(&query_game_info(deps, game_id)?),
+        QueryMsg::GetTicketsForWallet { game_id, wallet_addr } => to_json_binary(&query_tickets_for_wallet(deps, game_id, wallet_addr)?),
+        QueryMsg::GetAllGames {} => to_json_binary(&query_all_games(deps)?)
     }
 }
 
 fn query_global_info(deps: Deps) -> StdResult<GlobalResponse> {
-    let global_state = GLOBALSTATE.load(deps.storage)?;
+    let global_state = GLOBAL_STATE.load(deps.storage)?;
 
     Ok(GlobalResponse { 
         raffle_count: global_state.count,
@@ -340,19 +377,46 @@ fn query_global_info(deps: Deps) -> StdResult<GlobalResponse> {
     })
 }
 
-fn query_game_info(deps: Deps, game_id: u32) -> StdResult<GameResponse> {
-    let game_state = GAMESTATE.load(deps.storage, game_id)
+fn query_game_info(deps: Deps, game_id: u64) -> StdResult<GameResponse> {
+    let game_state = GAME_STATE.load(deps.storage, game_id)
         .map_err(|_| StdError::generic_err("Game with provided ID does not exist"))?;
 
     Ok(GameResponse { 
         ticket_price: game_state.ticket_price,
         sold_ticket_count: game_state.sold_ticket_count,
         total_ticket_count: game_state.total_ticket_count,
+        total_seigma_amounts: game_state.total_seigma_amounts,
         raffle_status: game_state.raffle_status,
         nft_contract_addr: game_state.nft_contract_addr,
         nft_token_id: game_state.nft_token_id,
         owner: game_state.owner,
         collection_wallet: game_state.collection_wallet,
         end_time: game_state.end_time,
+    })
+}
+
+fn query_tickets_for_wallet(
+    deps: Deps,
+    game_id: u64,
+    wallet_addr: Addr,
+) -> StdResult<WalletTicketResponse> {
+    let key = (game_id, wallet_addr);
+
+    // Directly retrieve the list of ticket numbers for the wallet and game ID
+    let tickets = WALLET_TICKETS.load(deps.storage, key).unwrap_or_else(|_| Vec::new());
+
+    Ok(WalletTicketResponse{
+        tickets: tickets
+    })
+}
+
+pub fn query_all_games(deps: Deps) -> StdResult<AllGamesResponse> {
+    let all_games = GAME_STATE.range(deps.storage, None, None, cosmwasm_std::Order::Ascending)
+        .filter_map(|item| item.ok()) // Filter out any errors
+        .map(|(_, game_state)| game_state) // We're interested in the GameState value
+        .collect::<Vec<GameState>>();
+
+    Ok(AllGamesResponse {
+        games: all_games,
     })
 }
