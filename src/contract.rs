@@ -1,6 +1,6 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{coin, to_json_binary, Addr, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, QuerierWrapper, QueryRequest, Response, StdError, StdResult, Storage, WasmMsg, WasmQuery};
+use cosmwasm_std::{coin, to_json_binary, Addr, BankMsg, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo, BankQuery, QuerierWrapper, QueryRequest, Response, StdError, StdResult, WasmMsg, WasmQuery};
 use cw2::set_contract_version;
 use cw721::Cw721ExecuteMsg;
 use sha2::{Sha256, Digest};
@@ -9,7 +9,7 @@ use cw721::{Cw721QueryMsg, OwnerOfResponse};
 // use cosmwasm_std::{to_json_binary, Addr, QuerierWrapper, StdResult, WasmQuery, QueryRequest};
 
 use crate::error::ContractError;
-use crate::msg::{GlobalResponse, GameResponse, WalletTicketResponse, AllGamesResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::msg::{GlobalResponse, GameResponse, WalletTicketResponse, AllGamesResponse, BalanceResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::state::{GlobalState, GameState, GameStatus, GAME_STATE, GLOBAL_STATE, TICKET_STATUS, WALLET_TICKETS};
 
 // version info for migration info
@@ -56,8 +56,8 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::ReceiveNft { sender, token_id, msg } => try_receive_nft(deps, env, info, sender, token_id, msg),
-        ExecuteMsg::StartRaffle { ticket_price, refund_price, total_ticket_count, nft_contract_addr, nft_token_id, collection_wallet, end_time } => 
-            try_start_raffle(deps, env, info, ticket_price, refund_price, total_ticket_count, nft_contract_addr, nft_token_id, collection_wallet, end_time),
+        ExecuteMsg::StartRaffle { ticket_price, total_ticket_count, nft_contract_addr, nft_token_id, collection_wallet, end_time } => 
+            try_start_raffle(deps, env, info, ticket_price, total_ticket_count, nft_contract_addr, nft_token_id, collection_wallet, end_time),
         ExecuteMsg::EnterRaffle { game_id } => try_enter_raffle(deps, env, info, game_id),
         ExecuteMsg::TransferTokensToCollectionWallet { amount, denom, collection_wallet_address } => try_transfer_tokens_to_collection_wallet(deps, env, info, amount, denom, collection_wallet_address),
         ExecuteMsg::SelectWinnerAndTransferNFTtoWinner { game_id } => try_select_winner_and_transfer_nft_to_winner(deps, env, info, game_id),
@@ -83,14 +83,16 @@ pub fn try_receive_nft(
 }
 
 // Function to get the current status of a game
-pub fn get_game_status(storage: &dyn Storage, env: Env, game_id: u64) -> StdResult<GameStatus> {
-    let game = GAME_STATE.load(storage, game_id)?;
+pub fn get_game_status(raffle_status: u8, end_time: u64, cur_time: u64) -> StdResult<GameStatus> {
 
-    if game.raffle_status == 1 {
+    if raffle_status == 0 {
         Ok(GameStatus::Ended)
-    } else if env.block.time.seconds() >= game.end_time {
+    } 
+    else if cur_time * 1000 >= end_time {
+        
         Ok(GameStatus::TimeOver)
-    } else {
+    }
+    else {
         Ok(GameStatus::Active)
     }
 }
@@ -115,7 +117,6 @@ fn try_start_raffle(
     env: Env,
     info: MessageInfo,
     ticket_price: u64,
-    refund_price: u64,
     total_ticket_count: u64,
     nft_contract_addr: Addr,
     nft_token_id: String,
@@ -140,9 +141,7 @@ fn try_start_raffle(
         raffle_status: 1,
         sold_ticket_count: 0,
         ticket_price: ticket_price,
-        refund_price: refund_price,
         total_ticket_count: total_ticket_count,
-        total_seigma_amounts: 0,
         nft_contract_addr: nft_contract_addr,
         nft_token_id: nft_token_id,
         owner: info.sender.clone(),
@@ -156,30 +155,6 @@ fn try_start_raffle(
     Ok(Response::new().add_attribute("method", "start_raffle").add_attribute("status", "active").add_attribute("game_id", count_tmp.to_string()))
 }
 
-// fn buy_tokens_for_losers(
-//     _deps: DepsMut,
-//     _env: Env,
-//     _info: MessageInfo,
-//     amount: u128, // Amount of SEI tokens to use for buying
-//     _target_token_denom: &str, // Target token you want to buy
-//     dex_contract_addr: &str, // Address of the DEX contract
-// ) -> StdResult<CosmosMsg> {
-//     // Construct the swap message according to the DEX's expected format
-//     // This is a placeholder; you must replace it with the actual format and parameters
-//     let swap_msg = {
-
-//     };
-
-//     // Convert the swap message to binary for the execute message
-//     let msg = to_json_binary(&swap_msg)?;
-
-//     Ok(CosmosMsg::Wasm(WasmMsg::Execute {
-//         contract_addr: dex_contract_addr.to_string(),
-//         msg,
-//         funds: vec![Coin { denom: "usei".to_string(), amount: amount.into() }], // Sending SEI tokens with the swap request
-//     }))
-// }
-
 fn try_enter_raffle(
     deps: DepsMut,
     env: Env,
@@ -189,59 +164,57 @@ fn try_enter_raffle(
 
     match GAME_STATE.load(deps.storage, game_id.clone()) {
         Ok(mut game_state) => {
-            let game_status = get_game_status(deps.storage, env.clone(), game_id)?;
+            if game_state.raffle_status.clone() == 0 {
+                return Err(ContractError::RaffleEnded {});
+            }
+            if game_state.end_time <= env.block.time.seconds() * 1000 {
+                return Err(ContractError::RaffleTimeOver {  });
+            }
 
-            match game_status {
-                GameStatus::Active => {
-                    // Ensure the sold_ticket_count does not exceed total_ticket_count
-                    if game_state.sold_ticket_count >= game_state.total_ticket_count {
-                        return Err(ContractError::RaffleSoldOut {});
-                    }
+            if game_state.sold_ticket_count >= game_state.total_ticket_count {
+                return Err(ContractError::RaffleSoldOut {});
+            }
 
-                    // Simulate ticket purchase by verifying sent funds match the ticket price
-                    let ticket_price = game_state.ticket_price as u128;
-                    let sent_funds = info.funds.iter().find(|coin| coin.denom == "usei").map_or(0u128, |coin| coin.amount.u128());
-                    if sent_funds.clone() < ticket_price.clone() {
-                        return Err(ContractError::IncorrectFunds {});
-                    }
-                    let purchase_ticket_count = sent_funds.clone() / ticket_price.clone();
-                    let real_purchase_ticket_count = std::cmp::min(purchase_ticket_count, game_state.total_ticket_count.clone() as u128 - game_state.sold_ticket_count.clone() as u128);
-                    let start_ticket_number = game_state.sold_ticket_count.clone();
-                    let key = (game_id.clone(), info.sender.clone());
+            // Simulate ticket purchase by verifying sent funds match the ticket price
+            let ticket_price = game_state.ticket_price as u128;
+            let sent_funds = info.funds.iter().find(|coin| coin.denom == "usei").map_or(0u128, |coin| coin.amount.u128());
+            if sent_funds.clone() < ticket_price.clone() {
+                return Err(ContractError::IncorrectFunds {});
+            }
+            let purchase_ticket_count = sent_funds.clone() / ticket_price.clone();
+            let real_purchase_ticket_count = std::cmp::min(purchase_ticket_count, game_state.total_ticket_count.clone() as u128 - game_state.sold_ticket_count.clone() as u128);
+            let start_ticket_number = game_state.sold_ticket_count.clone();
+            let key = (game_id.clone(), info.sender.clone());
 
-                    // Retrieve the current list of tickets for the wallet and game ID, if it exists
-                    let mut tickets = WALLET_TICKETS.load(deps.storage, key.clone()).unwrap_or_else(|_| Vec::new());
-                    // Increment the sold_ticket_count and save the participant's address
-                    for i in 0..real_purchase_ticket_count{
-                        TICKET_STATUS.save(deps.storage, (game_id.clone(), start_ticket_number.clone() + i as u64) , &info.sender.clone())?;
-                        tickets.push(start_ticket_number.clone() + i as u64);
-                    }
-                    // Save the updated list back to storage
-                    WALLET_TICKETS.save(deps.storage, key, &tickets)?;
-                    game_state.sold_ticket_count += real_purchase_ticket_count.clone() as u64;
-                    GAME_STATE.save(deps.storage, game_id , &game_state)?;
+            // Retrieve the current list of tickets for the wallet and game ID, if it exists
+            let mut tickets = WALLET_TICKETS.load(deps.storage, key.clone()).unwrap_or_else(|_| Vec::new());
+            // Increment the sold_ticket_count and save the participant's address
+            for i in 0..real_purchase_ticket_count{
+                TICKET_STATUS.save(deps.storage, (game_id.clone(), start_ticket_number.clone() + i as u64) , &info.sender.clone())?;
+                tickets.push(start_ticket_number.clone() + 1 + i as u64);
+            }
+            // Save the updated list back to storage
+            WALLET_TICKETS.save(deps.storage, key, &tickets)?;
+            game_state.sold_ticket_count += real_purchase_ticket_count.clone() as u64;
+            GAME_STATE.save(deps.storage, game_id , &game_state)?;
 
-                    let refund_amount = sent_funds.clone() - ticket_price * real_purchase_ticket_count.clone();
+            let refund_amount = sent_funds.clone() - ticket_price * real_purchase_ticket_count.clone();
 
-                    if refund_amount > 0 {
-                        let send_msg = BankMsg::Send {
-                            to_address: info.sender.into_string(),
-                            amount: vec![coin(refund_amount, "usei")]
-                        };
-                        Ok(Response::new().add_attribute("action", "enter_raffle")
-                            .add_attribute("start_ticket_number", (start_ticket_number + 1).to_string())
-                            .add_attribute("purchase_ticket_count", real_purchase_ticket_count.to_string())
-                            .add_message(send_msg)
-                        )                
-                    }
-                    else{
-                        Ok(Response::new().add_attribute("action", "enter_raffle")
-                            .add_attribute("start_ticket_number", (start_ticket_number + 1).to_string())
-                            .add_attribute("purchase_ticket_count", real_purchase_ticket_count.to_string()))
-                    }
-                },
-                GameStatus::Ended => Err(ContractError::RaffleEnded {}),
-                GameStatus::TimeOver => Err(ContractError::RaffleTimeOver {}),
+            if refund_amount > 0 {
+                let send_msg = BankMsg::Send {
+                    to_address: info.sender.into_string(),
+                    amount: vec![coin(refund_amount, "usei")]
+                };
+                Ok(Response::new().add_attribute("action", "enter_raffle")
+                    .add_attribute("start_ticket_number", (start_ticket_number + 1).to_string())
+                    .add_attribute("purchase_ticket_count", real_purchase_ticket_count.to_string())
+                    .add_message(send_msg)
+                )                
+            }
+            else{
+                Ok(Response::new().add_attribute("action", "enter_raffle")
+                    .add_attribute("start_ticket_number", (start_ticket_number + 1).to_string())
+                    .add_attribute("purchase_ticket_count", real_purchase_ticket_count.to_string()))
             }
         },
         Err(_) => {
@@ -285,13 +258,14 @@ fn try_select_winner_and_transfer_nft_to_winner(
     _info: MessageInfo,
     game_id: u64
 ) -> Result<Response, ContractError> {
-    let game_status = get_game_status(deps.storage, env.clone(), game_id.clone())?;
-
-    match game_status {
-        GameStatus::Active => Err(ContractError::CantFinishGame {}), 
-        GameStatus::Ended => Err(ContractError::RaffleEnded {}),
-        GameStatus::TimeOver => {
-            let mut game_state = GAME_STATE.load(deps.storage, game_id.clone())?;
+    match GAME_STATE.load(deps.storage, game_id.clone()) {
+        Ok(mut game_state) => {
+            if game_state.raffle_status.clone() == 0 {
+                return Err(ContractError::RaffleEnded {});
+            }
+            if game_state.end_time > env.block.time.seconds() * 1000 {
+                return Err(ContractError::CantFinishGame {});
+            }
 
             let mod_number = game_state.total_ticket_count as u64;
             let sold_count = game_state.sold_ticket_count as u64;
@@ -354,6 +328,9 @@ fn try_select_winner_and_transfer_nft_to_winner(
                         .add_attribute("status", "Winner ticket was not sold"))
                 }
             }
+        },
+        Err(_) => {
+            return Err(ContractError::WrongGameId {});
         }
     }
     
@@ -361,12 +338,13 @@ fn try_select_winner_and_transfer_nft_to_winner(
 
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetGlobalInfo {} => to_json_binary(&query_global_info(deps)?),
         QueryMsg::GetGameInfo { game_id } => to_json_binary(&query_game_info(deps, game_id)?),
         QueryMsg::GetTicketsForWallet { game_id, wallet_addr } => to_json_binary(&query_tickets_for_wallet(deps, game_id, wallet_addr)?),
-        QueryMsg::GetAllGames {} => to_json_binary(&query_all_games(deps)?)
+        QueryMsg::GetAllGames {} => to_json_binary(&query_all_games(deps)?),
+        QueryMsg::GetBalance {} => to_json_binary(&query_sei_balance(deps, env)?),
     }
 }
 
@@ -387,7 +365,6 @@ fn query_game_info(deps: Deps, game_id: u64) -> StdResult<GameResponse> {
         ticket_price: game_state.ticket_price,
         sold_ticket_count: game_state.sold_ticket_count,
         total_ticket_count: game_state.total_ticket_count,
-        total_seigma_amounts: game_state.total_seigma_amounts,
         raffle_status: game_state.raffle_status,
         nft_contract_addr: game_state.nft_contract_addr,
         nft_token_id: game_state.nft_token_id,
@@ -421,4 +398,22 @@ pub fn query_all_games(deps: Deps) -> StdResult<AllGamesResponse> {
     Ok(AllGamesResponse {
         games: all_games,
     })
+}
+
+pub fn query_sei_balance(deps: Deps, env: Env) -> StdResult<BalanceResponse> {
+    let sei_denom = "usei";
+
+    let query = QueryRequest::Bank(BankQuery::Balance {
+        address: env.contract.address.to_string(),
+        denom: sei_denom.to_string(),
+    });
+
+    // Execute the query
+    let res: cosmwasm_std::BalanceResponse = deps.querier.query(&query)?;
+
+    // Find the SEI token in the response
+    let sei_balance = res.amount; // Assuming `amount` is the field you're interested in.
+
+    // Construct your BalanceResponse, assuming it expects a Coin
+    Ok(BalanceResponse { balance: sei_balance })
 }

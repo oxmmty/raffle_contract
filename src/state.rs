@@ -21,10 +21,8 @@ pub struct GlobalState {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GameState {
     pub ticket_price: u64,
-    pub refund_price: u64,
     pub sold_ticket_count: u64,
     pub total_ticket_count: u64,
-    pub total_seigma_amounts: u128,
     pub raffle_status: u8,
     pub nft_contract_addr: Addr,
     pub nft_token_id: String,

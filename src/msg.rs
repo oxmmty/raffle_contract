@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::Addr;
 use cosmwasm_std::Binary;
+use cosmwasm_std::Coin;
 
 use crate::state::GameState;
 
@@ -22,7 +23,6 @@ pub enum ExecuteMsg {
     },
     StartRaffle {
         ticket_price: u64,
-        refund_price: u64,
         total_ticket_count: u64,
         nft_contract_addr: Addr,
         nft_token_id: String,
@@ -48,6 +48,7 @@ pub enum QueryMsg {
     GetGameInfo { game_id: u64 },
     GetTicketsForWallet { game_id: u64, wallet_addr: Addr },
     GetAllGames {},
+    GetBalance {},
 }
 
 // We define a custom struct for each query response
@@ -62,7 +63,6 @@ pub struct GameResponse {
     pub ticket_price: u64,
     pub sold_ticket_count: u64,
     pub total_ticket_count: u64,
-    pub total_seigma_amounts: u128,
     pub raffle_status: u8,
     pub nft_contract_addr: Addr,
     pub nft_token_id: String,
@@ -79,4 +79,9 @@ pub struct WalletTicketResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AllGamesResponse {
     pub games: Vec<GameState>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct BalanceResponse {
+    pub balance: Coin,
 }
