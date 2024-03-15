@@ -10,7 +10,7 @@ use cw721::{Cw721QueryMsg, OwnerOfResponse};
 
 use crate::error::ContractError;
 use crate::msg::{GlobalResponse, GameResponse, WalletTicketResponse, AllGamesResponse, ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{GlobalState, GameState, GameStatus, GAME_STATE, GLOBAL_STATE, TICKET_STATUS, NFT_STATUS, WALLET_TICKETS};
+use crate::state::{GlobalState, GameState, GameStatus, GAME_STATE, GLOBAL_STATE, TICKET_STATUS, WALLET_TICKETS};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:raffle";
@@ -19,7 +19,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
@@ -44,8 +44,7 @@ pub fn instantiate(
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
-        .add_attribute("owner", msg.owner.to_string())
-        .add_attribute("contract_address", env.contract.address.to_string()))
+        .add_attribute("owner", msg.owner.to_string()))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -133,14 +132,6 @@ fn try_start_raffle(
         return Err(ContractError::CantAccessPrize {});
     }
     
-    // Check if the NFT is available for use as a prize
-    let nft_status_key = (nft_contract_addr.clone(), nft_token_id.clone());
-    let nft_status = NFT_STATUS.load(deps.storage, nft_status_key.clone())?;
-    if nft_status {
-        return Err(ContractError::CantAccessPrize {});
-    }
-
-    NFT_STATUS.save(deps.storage, nft_status_key, &true)?;
     let count_tmp = global_state.count.clone() + 1;
     global_state.count += 1;
 
@@ -340,12 +331,23 @@ fn try_select_winner_and_transfer_nft_to_winner(
                         .add_attribute("token_id", game_state.nft_token_id))                    
                 },
                 Err(_) => {
-                    // If the ticket wasn't sold, simply end the raffle without transferring the NFT
+                    // If the ticket wasn't sold, simply end the raffle with transferring the NFT to collection wallet.
+                    let transfer_msg = Cw721ExecuteMsg::TransferNft {
+                        recipient: game_state.collection_wallet.clone().into_string(),
+                        token_id: game_state.nft_token_id.clone(),
+                    };
+        
+                    let msg = CosmosMsg::Wasm(WasmMsg::Execute {
+                        contract_addr: game_state.nft_contract_addr.clone().into_string(),
+                        msg: to_json_binary(&transfer_msg)?,
+                        funds: vec![],
+                    });
+
                     game_state.raffle_status = 0; // End the raffle
                     GAME_STATE.save(deps.storage, game_id.clone(), &game_state)?;
-                    NFT_STATUS.save(deps.storage, (game_state.nft_contract_addr, game_state.nft_token_id), &false)?;
 
                     Ok(Response::new()
+                        .add_message(msg)
                         .add_attribute("action", "select_winner")
                         .add_attribute("game_id", game_id.to_string())
                         .add_attribute("winner_ticket", (winner_index + 1).to_string())
