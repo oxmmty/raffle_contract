@@ -14,7 +14,7 @@ pub enum GameStatus {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GlobalState {
     pub count: u64,
-    pub owner: Addr
+    // pub owner: Addr
 }
 
 
@@ -24,7 +24,7 @@ pub struct GameState {
     pub sold_ticket_count: u64,
     // pub total_ticket_count: u64,
     pub raffle_status: u8,
-    pub nft_contract_addr: Addr,
+    // pub nft_contract_addr: Addr,
     pub nft_token_id: String,
     // pub owner: Addr,
     pub collection_wallet: Addr, // Collection wallet address to send tokens after the game finished
