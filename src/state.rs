@@ -33,5 +33,5 @@ pub struct GameState {
 
 // pub const GLOBAL_STATE: Item<GlobalState> = Item::new("global_state");
 pub const GAME_STATE: Map<u64, GameState> = Map::new("game_state");
-pub const TICKET_STATUS: Map<(u64, u64), Addr> = Map::new("ticket_status");
+// pub const TICKET_STATUS: Map<(u64, u64), Addr> = Map::new("ticket_status");
 // pub const WALLET_TICKETS: Map<(u64, Addr), Vec<u64>> = Map::new("wallet_tickets");
