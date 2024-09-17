@@ -8,7 +8,7 @@ use cw_storage_plus::{Item, Map};
 pub enum GameStatus {
     Active,
     Ended,
-    TimeOver,
+    // TimeOver,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
