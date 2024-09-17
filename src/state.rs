@@ -13,7 +13,7 @@ pub enum GameStatus {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GlobalState {
-    pub count: u64,
+    // pub count: u64,
     // pub owner: Addr
 }
 
