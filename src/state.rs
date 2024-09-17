@@ -26,9 +26,9 @@ pub struct GameState {
     pub raffle_status: u8,
     // pub nft_contract_addr: Addr,
     pub nft_token_id: String,
-    pub owner: Addr,
+    // pub owner: Addr,
     pub collection_wallet: Addr, // Collection wallet address to send tokens after the game finished
-    pub end_time: u64,
+    // pub end_time: u64,
 }
 
 // pub const GLOBAL_STATE: Item<GlobalState> = Item::new("global_state");
