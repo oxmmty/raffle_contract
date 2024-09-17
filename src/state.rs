@@ -28,10 +28,10 @@ pub struct GameState {
     pub nft_token_id: String,
     pub owner: Addr,
     pub collection_wallet: Addr, // Collection wallet address to send tokens after the game finished
-    pub end_time: u64,
+    // pub end_time: u64,
 }
 
-pub const GLOBAL_STATE: Item<GlobalState> = Item::new("global_state");
-pub const GAME_STATE: Map<u64, GameState> = Map::new("game_state");
+// pub const GLOBAL_STATE: Item<GlobalState> = Item::new("global_state");
+// pub const GAME_STATE: Map<u64, GameState> = Map::new("game_state");
 // pub const TICKET_STATUS: Map<(u64, u64), Addr> = Map::new("ticket_status");
-pub const WALLET_TICKETS: Map<(u64, Addr), Vec<u64>> = Map::new("wallet_tickets");
+// pub const WALLET_TICKETS: Map<(u64, Addr), Vec<u64>> = Map::new("wallet_tickets");
