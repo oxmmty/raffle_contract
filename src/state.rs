@@ -1,6 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+
 // use cosmwasm_std::Addr;
 // use cw_storage_plus::{Item, Map};
 
@@ -13,7 +14,7 @@ pub enum GameStatus {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GlobalState {
-    // pub count: u64,
+    pub count: u64,
     pub owner: Addr
 }
 
