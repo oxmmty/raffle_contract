@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum GameStatus {
     Active,
-    // Ended,
-    // TimeOver,
+    Ended,
+    TimeOver,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
