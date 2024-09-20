@@ -2,12 +2,18 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 
-// use cosmwasm_std::Addr;
-<<<<<<< dev
+
+use cosmwasm_std::Addr;
 use cw_storage_plus::{Item, Map};
-=======
+use cw_storage_plus::{Item, Map};
+
+
+// use cosmwasm_std::Addr;
+
+use cw_storage_plus::{Item, Map};
+
 // use cw_storage_plus::{Item, Map};
->>>>>>> main
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum GameStatus {
