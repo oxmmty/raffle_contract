@@ -25,7 +25,11 @@ pub fn instantiate(
     // msg: InstantiateMsg,
 
     // info: MessageInfo,
+
+    // msg: InstantiateMsg,
+
     msg: InstantiateMsg,
+
 
 ) -> Result<Response, ContractError> {
     let sender_str = info.sender.clone().to_string();
