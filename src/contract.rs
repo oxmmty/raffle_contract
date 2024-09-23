@@ -114,10 +114,10 @@ fn can_transfer_nft(querier: &QuerierWrapper, nft_contract_addr: Addr, nft_token
 }
 
 fn try_start_raffle(
-    deps: DepsMut,
-    env: Env,
-    info: MessageInfo,
-    ticket_price: u64,
+    // deps: DepsMut,
+    // env: Env,
+    // info: MessageInfo,
+    // ticket_price: u64,
     total_ticket_count: u64,
     nft_contract_addr: Addr,
     nft_token_id: String,
