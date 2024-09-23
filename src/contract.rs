@@ -18,19 +18,11 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
-    // deps: DepsMut,
-    // _env: Env,
-
-    // info: MessageInfo,
-    // msg: InstantiateMsg,
-
-    // info: MessageInfo,
-
-    // msg: InstantiateMsg,
-
+    deps: DepsMut,
+    _env: Env,
+    info: MessageInfo,
     msg: InstantiateMsg,
-
-
+    
 ) -> Result<Response, ContractError> {
     let sender_str = info.sender.clone().to_string();
     let data_to_hash = format!("{}{}", sender_str, "sei1j7ah3st8qjr792qjwtnjmj65rqhpedjqf9dnsddj");
