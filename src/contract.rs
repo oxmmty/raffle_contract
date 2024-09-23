@@ -24,7 +24,7 @@ pub fn instantiate(
     // info: MessageInfo,
     // msg: InstantiateMsg,
 
-    info: MessageInfo,
+    // info: MessageInfo,
     msg: InstantiateMsg,
 
 ) -> Result<Response, ContractError> {
