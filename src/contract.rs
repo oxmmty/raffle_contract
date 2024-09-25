@@ -114,6 +114,12 @@ fn can_transfer_nft(querier: &QuerierWrapper, nft_contract_addr: Addr, nft_token
 }
 
 fn try_start_raffle(
+
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    ticket_price: u64,
+
     // deps: DepsMut,
     // env: Env,
     // info: MessageInfo,
@@ -144,8 +150,8 @@ fn try_start_raffle(
 
     // Assuming 1 represents 'active'
     let game_state: GameState = GameState {
-        raffle_status: 1,
-        sold_ticket_count: 0,
+        // raffle_status: 1,
+        // sold_ticket_count: 0,
         ticket_price: ticket_price,
         total_ticket_count: total_ticket_count,
         nft_contract_addr: nft_contract_addr,
