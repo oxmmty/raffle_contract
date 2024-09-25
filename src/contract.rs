@@ -114,7 +114,6 @@ fn can_transfer_nft(querier: &QuerierWrapper, nft_contract_addr: Addr, nft_token
 }
 
 fn try_start_raffle(
-
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
