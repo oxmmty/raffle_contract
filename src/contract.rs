@@ -119,18 +119,12 @@ fn try_start_raffle(
     env: Env,
     info: MessageInfo,
     ticket_price: u64,
-
-    // deps: DepsMut,
-    // env: Env,
-    // info: MessageInfo,
-    // ticket_price: u64,
-
-    // total_ticket_count: u64,
-    // nft_contract_addr: Addr,
-
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    ticket_price: u64,
     total_ticket_count: u64,
     nft_contract_addr: Addr,
-
     nft_token_id: String,
     collection_wallet: Addr,
     end_time: u64
