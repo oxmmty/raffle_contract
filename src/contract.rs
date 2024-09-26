@@ -152,9 +152,11 @@ fn try_start_raffle(
         // nft_token_id: nft_token_id,
 
 
-        owner: info.sender.clone(),
-        collection_wallet: collection_wallet,
-        end_time: end_time,
+
+        // owner: info.sender.clone(),
+        // collection_wallet: collection_wallet,
+        // end_time: end_time,
+
     };
 
     GLOBAL_STATE.save(deps.storage, &global_state)?;
