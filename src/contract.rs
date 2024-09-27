@@ -371,7 +371,7 @@ fn query_game_info(deps: Deps, game_id: u64) -> StdResult<GameResponse> {
 
         // sold_ticket_count: game_state.sold_ticket_count,
 
-        total_ticket_count: game_state.total_ticket_count,
+        // total_ticket_count: game_state.total_ticket_count,
         raffle_status: game_state.raffle_status,
         nft_contract_addr: game_state.nft_contract_addr,
         nft_token_id: game_state.nft_token_id,
