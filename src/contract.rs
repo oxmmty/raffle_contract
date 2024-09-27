@@ -367,7 +367,7 @@ fn query_game_info(deps: Deps, game_id: u64) -> StdResult<GameResponse> {
         .map_err(|_| StdError::generic_err("Game with provided ID does not exist"))?;
 
     Ok(GameResponse { 
-        ticket_price: game_state.ticket_price,
+        // ticket_price: game_state.ticket_price,
         sold_ticket_count: game_state.sold_ticket_count,
         total_ticket_count: game_state.total_ticket_count,
         raffle_status: game_state.raffle_status,
