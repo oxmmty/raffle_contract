@@ -143,19 +143,14 @@ fn try_start_raffle(
 
     // Assuming 1 represents 'active'
     let game_state: GameState = GameState {
-        // raffle_status: 1,
-        // sold_ticket_count: 0,
-        // ticket_price: ticket_price,
-        // total_ticket_count: total_ticket_count,
+        raffle_status: 1,
+        sold_ticket_count: 0,
+        ticket_price: ticket_price,
+        total_ticket_count: total_ticket_count,
 
-        // nft_contract_addr: nft_contract_addr,
-        // nft_token_id: nft_token_id,
+        nft_contract_addr: nft_contract_addr,
+        nft_token_id: nft_token_id,
 
-
-
-        // owner: info.sender.clone(),
-        // collection_wallet: collection_wallet,
-        // end_time: end_time,
 
     };
 
