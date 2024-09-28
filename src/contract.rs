@@ -367,22 +367,24 @@ fn query_game_info(deps: Deps, game_id: u64) -> StdResult<GameResponse> {
         .map_err(|_| StdError::generic_err("Game with provided ID does not exist"))?;
 
     Ok(GameResponse { 
-        // ticket_price: game_state.ticket_price,
-        // sold_ticket_count: game_state.sold_ticket_count,
-        // total_ticket_count: game_state.total_ticket_count,
-        // raffle_status: game_state.raffle_status,
 
-        // nft_contract_addr: game_state.nft_contract_addr,
+        ticket_price: game_state.ticket_price,
+        sold_ticket_count: game_state.sold_ticket_count,
+        total_ticket_count: game_state.total_ticket_count,
+        raffle_status: game_state.raffle_status,
 
-        // nft_token_id: game_state.nft_token_id,
+        nft_contract_addr: game_state.nft_contract_addr,
 
-        // owner: game_state.owner,
+        nft_token_id: game_state.nft_token_id,
 
-
-        // collection_wallet: game_state.collection_wallet,
+        owner: game_state.owner,
 
 
-        // end_time: game_state.end_time,
+        collection_wallet: game_state.collection_wallet,
+
+
+        end_time: game_state.end_time,
+
 
     })
 }
