@@ -375,7 +375,9 @@ fn query_game_info(deps: Deps, game_id: u64) -> StdResult<GameResponse> {
         // nft_contract_addr: game_state.nft_contract_addr,
 
         // nft_token_id: game_state.nft_token_id,
+
         // owner: game_state.owner,
+
         collection_wallet: game_state.collection_wallet,
         end_time: game_state.end_time,
     })
