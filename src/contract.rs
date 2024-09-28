@@ -385,6 +385,7 @@ fn query_game_info(deps: Deps, game_id: u64) -> StdResult<GameResponse> {
 
         end_time: game_state.end_time,
 
+
     })
 }
 
