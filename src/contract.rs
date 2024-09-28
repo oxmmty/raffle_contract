@@ -378,7 +378,9 @@ fn query_game_info(deps: Deps, game_id: u64) -> StdResult<GameResponse> {
 
         // owner: game_state.owner,
 
-        collection_wallet: game_state.collection_wallet,
+
+        // collection_wallet: game_state.collection_wallet,
+
         end_time: game_state.end_time,
     })
 }
