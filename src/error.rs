@@ -36,8 +36,8 @@ pub enum ContractError {
     // #[error("Incorrect Funds")]
     // IncorrectFunds {},
 
-    #[error("Must send exactly {ticket_price} SEI to enter the raffle")]
-    PayError { ticket_price: u64 },
+    // #[error("Must send exactly {ticket_price} SEI to enter the raffle")]
+    // PayError { ticket_price: u64 },
 
     #[error("No participants in the raffle")]
     NoParticipants {},
