@@ -33,8 +33,8 @@ pub enum ContractError {
     // #[error("Can not access prize NFT")]
     // CantAccessPrize {},
 
-    #[error("Incorrect Funds")]
-    IncorrectFunds {},
+    // #[error("Incorrect Funds")]
+    // IncorrectFunds {},
 
     #[error("Must send exactly {ticket_price} SEI to enter the raffle")]
     PayError { ticket_price: u64 },
