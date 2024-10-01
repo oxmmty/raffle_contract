@@ -27,8 +27,8 @@ pub enum ContractError {
     // #[error("All raffle tickets was sold.")]
     // RaffleSoldOut {},
 
-    #[error("It is not the end time of the game")]
-    CantFinishGame {},
+    // #[error("It is not the end time of the game")]
+    // CantFinishGame {},
 
     #[error("Can not access prize NFT")]
     CantAccessPrize {},
