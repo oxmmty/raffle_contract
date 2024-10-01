@@ -39,8 +39,8 @@ pub enum ContractError {
     // #[error("Must send exactly {ticket_price} SEI to enter the raffle")]
     // PayError { ticket_price: u64 },
 
-    #[error("No participants in the raffle")]
-    NoParticipants {},
+    // #[error("No participants in the raffle")]
+    // NoParticipants {},
     
     #[error("Missing NFT contract address")]
     MissingNftContractAddr {}, 
