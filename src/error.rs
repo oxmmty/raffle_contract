@@ -30,8 +30,8 @@ pub enum ContractError {
     // #[error("It is not the end time of the game")]
     // CantFinishGame {},
 
-    #[error("Can not access prize NFT")]
-    CantAccessPrize {},
+    // #[error("Can not access prize NFT")]
+    // CantAccessPrize {},
 
     #[error("Incorrect Funds")]
     IncorrectFunds {},
