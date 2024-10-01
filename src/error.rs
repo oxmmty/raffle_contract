@@ -24,8 +24,8 @@ pub enum ContractError {
     // #[error("Raffle not started yet")]
     // RaffleNotActive {},
     
-    #[error("All raffle tickets was sold.")]
-    RaffleSoldOut {},
+    // #[error("All raffle tickets was sold.")]
+    // RaffleSoldOut {},
 
     #[error("It is not the end time of the game")]
     CantFinishGame {},
