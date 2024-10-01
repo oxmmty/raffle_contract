@@ -15,14 +15,14 @@ pub enum ContractError {
     // #[error("Wrong Game Id")]
     // WrongGameId {},
 
-    #[error("Raffle already ended")]
-    RaffleEnded {},
+    // #[error("Raffle already ended")]
+    // RaffleEnded {},
 
-    #[error("Raffle Time Over")]
-    RaffleTimeOver {},
+    // #[error("Raffle Time Over")]
+    // RaffleTimeOver {},
 
-    #[error("Raffle not started yet")]
-    RaffleNotActive {},
+    // #[error("Raffle not started yet")]
+    // RaffleNotActive {},
     
     #[error("All raffle tickets was sold.")]
     RaffleSoldOut {},
