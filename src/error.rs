@@ -42,8 +42,8 @@ pub enum ContractError {
     // #[error("No participants in the raffle")]
     // NoParticipants {},
     
-    #[error("Missing NFT contract address")]
-    MissingNftContractAddr {}, 
+    // #[error("Missing NFT contract address")]
+    // MissingNftContractAddr {}, 
 
     #[error("Can not transfer tokens until raffle is finished")]
     CantTransferTokens {},
