@@ -18,8 +18,8 @@ pub enum ContractError {
     #[error("Raffle already ended")]
     RaffleEnded {},
 
-    // #[error("Raffle Time Over")]
-    // RaffleTimeOver {},
+    #[error("Raffle Time Over")]
+    RaffleTimeOver {},
 
     // #[error("Raffle not started yet")]
     // RaffleNotActive {},
