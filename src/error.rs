@@ -9,8 +9,8 @@ pub enum ContractError {
     #[error("Unauthorized")]
     Unauthorized {},
 
-    // #[error("Custom Error val: {val:?}")]
-    // CustomError { val: String },
+    #[error("Custom Error val: {val:?}")]
+    CustomError { val: String },
 
     // #[error("Wrong Game Id")]
     // WrongGameId {},
