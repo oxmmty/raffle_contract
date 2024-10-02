@@ -12,8 +12,8 @@ pub enum ContractError {
     #[error("Custom Error val: {val:?}")]
     CustomError { val: String },
 
-    // #[error("Wrong Game Id")]
-    // WrongGameId {},
+    #[error("Wrong Game Id")]
+    WrongGameId {},
 
     // #[error("Raffle already ended")]
     // RaffleEnded {},
