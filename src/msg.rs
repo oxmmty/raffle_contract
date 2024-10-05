@@ -60,8 +60,8 @@ pub struct GlobalResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GameResponse {
-    // pub ticket_price: u64,
-    // pub sold_ticket_count: u64,
+    pub ticket_price: u64,
+    pub sold_ticket_count: u64,
     pub total_ticket_count: u64,
     pub raffle_status: u8,
     pub nft_contract_addr: Addr,
